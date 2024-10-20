@@ -15,8 +15,9 @@ def secretDataStep(Payload,k):
 
     base10Payload = [int(binary_string, 2) for binary_string in slicedPayload]
     base10Payload = np.array(base10Payload)
+    lengthBase10Conv=len(base10Payload)
     print("Base10 Payload:", base10Payload)
-    return base10Payload
+    return base10Payload,lengthBase10Conv
 
 def centerShiftOperation(s,d,n):
     dAks1=getDAks1(s,d)
@@ -74,7 +75,7 @@ def calculateD2(dAks2):
     return d1
 
 def calcualateStego(cpX,d):
-    print("d:",d)
+    # print("d:",d)
     stego=cpX
     counter=1
     
@@ -106,8 +107,30 @@ def getCoverImage(X1, X2):
         X[i] = math.ceil((int(X1[i]) + int(X2[i])) / 2)
     return X
 
+def calculateSecretDataBase10(d,dAks2,n):
+    s=np.zeros_like(d)
+    temp=pow(2,n-1)
+    for i in range(len(d)):
+        s[i]=d[i]+dAks2[i]+temp
+    return s
 
+def convert_to_base2_with_n_digits(array, n):
+    base2_array = [format(num, f'0{n}b') for num in array]
+    return base2_array
 
+def convert_and_concatenate(array):
+    # Concatenate the binary strings to form a single binary string
+    concatenated_binary_string = ''.join(array)
+    return concatenated_binary_string
+
+def convert_to_base10_per_8digits(binary_string):
+    # Split the binary string into chunks of 8 digits
+    chunks = [binary_string[i:i+8] for i in range(0, len(binary_string), 8)]
+    
+    # Convert each chunk to base 10
+    base10_array = [int(chunk, 2) for chunk in chunks]
+    
+    return base10_array
 
 # Load n value
 n=3
@@ -123,6 +146,7 @@ w,h=X.shape
 XFlatten=X.flatten() #convert to 1D array
 print("XFlatten:",XFlatten)
 d=getD(XFlatten,n)
+print("d:",d)
 # for i in d:
 #     print(i,end=" ")
 cpX1=np.copy(XFlatten)
@@ -137,7 +161,7 @@ Payload = np.array([int(char) for char in payload_data])
 print("Payload type:", type(Payload))
 print("Payload shape:", Payload.shape)
 print("Payload:", Payload)
-newPayload=secretDataStep(Payload,k)
+newPayload,lengthBase10Conv=secretDataStep(Payload,k)
 
 d1,d2=centerShiftOperation(newPayload,d,n)
 
@@ -173,4 +197,23 @@ Xtemp=X.reshape(w,h)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
 
+d=getD(X,n)
+print("d:",d)
 
+s=calculateSecretDataBase10(d,dAks2,n)
+S10=s[:lengthBase10Conv]
+print("Base10 conv:",S10)
+# print("Base10 Secret:",end=" ") ##########################Isinya sudah sama, hanya saja jumlah payloadnya terlalu banyak
+# for i in range(20):
+#     print(s[i],end=" ")
+
+S2=convert_to_base2_with_n_digits(S10,k)
+print("Base2 Secret:",S2)
+concatenateBase2=convert_and_concatenate(S2)
+secretData=convert_to_base10_per_8digits(concatenateBase2)
+print("Secret Data:",secretData)
+
+if np.array_equal(secretData, Payload):
+    print("Data is same")
+else:
+    print("Data is different")
