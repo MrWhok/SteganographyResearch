@@ -34,6 +34,8 @@ def centerShiftOperation(s,d,n):
 def getStego(cpX1,cpX2,d1,d2):
     x1=calcualateStego(cpX1,d1)
     x2=calcualateStego(cpX2,d2)
+    print("x1:",x1)
+    print("x2:",x2)
     return x1,x2
 
 
@@ -72,6 +74,7 @@ def calculateD2(dAks2):
     return d1
 
 def calcualateStego(cpX,d):
+    print("d:",d)
     stego=cpX
     counter=1
     
@@ -81,7 +84,27 @@ def calcualateStego(cpX,d):
             counter+=1
         else:
             stego[i]=cpX[i]
+    print("stego:",stego)
     return stego
+
+def calculateDifferent(X1, X2):
+    print("X1 in calculateDifferent:", X1)
+    print("X2 in calculateDifferent:", X2)
+    
+    # Convert to signed integers to handle negative differences
+    X1_signed = X1.astype(np.int16)
+    X2_signed = X2.astype(np.int16)
+    
+    diff = X1_signed - X2_signed
+    # print("diff:", diff)
+    
+    return diff
+
+def getCoverImage(X1, X2):
+    X = np.zeros_like(X1)  
+    for i in range(len(X1)):
+        X[i] = math.ceil((int(X1[i]) + int(X2[i])) / 2)
+    return X
 
 
 
@@ -91,21 +114,22 @@ n=3
 k=n+1
 
 # Load the cover image and display it
-X = cv2.imread('D:\\VsCode\\SteganoResearch\\Journal\\7.1.03.tiff', cv2.IMREAD_GRAYSCALE)
+X = cv2.imread('/home/aydin/Vscode/Kuliah/SteganographyResearch-master/7.1.03.tiff', cv2.IMREAD_GRAYSCALE)
 cv2.imshow('Input: Cover image', X)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 
 w,h=X.shape
 XFlatten=X.flatten() #convert to 1D array
+print("XFlatten:",XFlatten)
 d=getD(XFlatten,n)
 # for i in d:
 #     print(i,end=" ")
-cpX1=XFlatten
-cpX2=XFlatten
+cpX1=np.copy(XFlatten)
+cpX2=np.copy(XFlatten)
 
 # Load the payload
-with open(r'D:\\VsCode\\SteganoResearch\\Journal\\random_numbers.txt', 'r') as file:
+with open('/home/aydin/Vscode/Kuliah/SteganographyResearch-master/random_numbers.txt', 'r') as file:
     payload_data = file.read().strip().split('\n')
 
 # Convert the payload data to a numpy array
@@ -118,18 +142,35 @@ newPayload=secretDataStep(Payload,k)
 d1,d2=centerShiftOperation(newPayload,d,n)
 
 x1,x2=getStego(cpX1,cpX2,d1,d2)
+# print("x1:",x1)
+# print("x2:",x2)
 X1=x1.reshape(w,h)
 X2=x2.reshape(w,h)
 
-cv2.imshow('Output: Stego image', X1)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.imshow('Output: Stego image', X1)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 psnr_value = cv2.PSNR(X, X1)
 print("PSNR Value1:", psnr_value)
 
 
-cv2.imshow('Output: Stego image', X2)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+# cv2.imshow('Output: Stego image', X2)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
 psnr_value = cv2.PSNR(X, X2)
 print("PSNR Value2:", psnr_value)
+
+
+
+##EXTRACTION
+dAks2=calculateDifferent(x1,x2)
+print("diff:",dAks2)
+X=getCoverImage(x1,x2)
+print("X:",X)
+Xtemp=X.reshape(w,h)
+# print("Are equal:",np.array_equal(XFlatten,X))
+# cv2.imshow('Output: cover image', Xtemp)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+
