@@ -8,16 +8,17 @@ def secretDataStep(Payload,k):
     binaryPayload = np.array([format(num, '08b') for num in Payload])
     # print("New Payload:", binaryPayload)
     concenatedPayload= ''.join(binaryPayload)
+    padding= k - len(concenatedPayload) % k
 
     #slicing to k digit
     slicedPayload = [concenatedPayload[i:i+k] for i in range(0, len(concenatedPayload), k)]
-    print("Sliced Payload:", slicedPayload)
+    # print("Sliced Payload:", slicedPayload)
 
     base10Payload = [int(binary_string, 2) for binary_string in slicedPayload]
     base10Payload = np.array(base10Payload)
     lengthBase10Conv=len(base10Payload)
-    print("Base10 Payload:", base10Payload)
-    return base10Payload,lengthBase10Conv
+    # print("Base10 Payload:", base10Payload)
+    return base10Payload,lengthBase10Conv, padding
 
 def centerShiftOperation(s,d,n):
     dAks1=getDAks1(s,d)
@@ -26,17 +27,17 @@ def centerShiftOperation(s,d,n):
     # print("dAks2:",dAks2)
 
     d1=calculateD1(dAks2)
-    print("d1:",d1)
+    # print("d1:",d1)
     d2=calculateD2(dAks2)
-    print("d2:",d2)
+    # print("d2:",d2)
 
     return d1,d2
 
 def getStego(cpX1,cpX2,d1,d2):
     x1=calcualateStego(cpX1,d1)
     x2=calcualateStego(cpX2,d2)
-    print("x1:",x1)
-    print("x2:",x2)
+    # print("x1:",x1)
+    # print("x2:",x2)
     return x1,x2
 
 
@@ -89,8 +90,8 @@ def calcualateStego(cpX,d):
     return stego
 
 def calculateDifferent(X1, X2):
-    print("X1 in calculateDifferent:", X1)
-    print("X2 in calculateDifferent:", X2)
+    # print("X1 in calculateDifferent:", X1)
+    # print("X2 in calculateDifferent:", X2)
     
     # Convert to signed integers to handle negative differences
     X1_signed = X1.astype(np.int16)
@@ -114,8 +115,14 @@ def calculateSecretDataBase10(d,dAks2,n):
         s[i]=d[i]+dAks2[i]+temp
     return s
 
-def convert_to_base2_with_n_digits(array, n):
+
+def convert_to_base2_with_n_digits(array, n, padding):
     base2_array = [format(num, f'0{n}b') for num in array]
+    
+    # Handle padding for the last value
+    if padding > 0 and len(base2_array) > 0:
+        base2_array[-1] = base2_array[-1][-n+padding:]
+    
     return base2_array
 
 def convert_and_concatenate(array):
@@ -133,7 +140,7 @@ def convert_to_base10_per_8digits(binary_string):
     return base10_array
 
 # Load n value
-n=3
+n=5
 k=n+1
 
 # Load the cover image and display it
@@ -160,8 +167,8 @@ with open('/home/aydin/Vscode/Kuliah/SteganographyResearch-master/random_numbers
 Payload = np.array([int(char) for char in payload_data])
 print("Payload type:", type(Payload))
 print("Payload shape:", Payload.shape)
-print("Payload:", Payload)
-newPayload,lengthBase10Conv=secretDataStep(Payload,k)
+# print("Payload:", Payload)
+newPayload,lengthBase10Conv,padding=secretDataStep(Payload,k)
 
 d1,d2=centerShiftOperation(newPayload,d,n)
 
@@ -188,9 +195,9 @@ print("PSNR Value2:", psnr_value)
 
 ##EXTRACTION
 dAks2=calculateDifferent(x1,x2)
-print("diff:",dAks2)
+# print("diff:",dAks2)
 X=getCoverImage(x1,x2)
-print("X:",X)
+# print("X:",X)
 Xtemp=X.reshape(w,h)
 # print("Are equal:",np.array_equal(XFlatten,X))
 # cv2.imshow('Output: cover image', Xtemp)
@@ -198,20 +205,20 @@ Xtemp=X.reshape(w,h)
 # cv2.destroyAllWindows()
 
 d=getD(X,n)
-print("d:",d)
+# print("d:",d)
 
 s=calculateSecretDataBase10(d,dAks2,n)
 S10=s[:lengthBase10Conv]
-print("Base10 conv:",S10)
+# print("Base10 conv:",S10)
 # print("Base10 Secret:",end=" ") ##########################Isinya sudah sama, hanya saja jumlah payloadnya terlalu banyak
 # for i in range(20):
 #     print(s[i],end=" ")
 
-S2=convert_to_base2_with_n_digits(S10,k)
-print("Base2 Secret:",S2)
+S2=convert_to_base2_with_n_digits(S10,k,padding)
+# print("Base2 Secret:",S2)
 concatenateBase2=convert_and_concatenate(S2)
 secretData=convert_to_base10_per_8digits(concatenateBase2)
-print("Secret Data:",secretData)
+# print("Secret Data:",secretData)
 
 if np.array_equal(secretData, Payload):
     print("Data is same")
