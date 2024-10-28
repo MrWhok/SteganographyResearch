@@ -2,225 +2,141 @@ import cv2
 import math
 import numpy as np
 
+class Steganography:
+    def __init__(self, n):
+        self.n = n
+        self.k = n + 1
 
-def secretDataStep(Payload,k):
-    #Convert to binary
-    binaryPayload = np.array([format(num, '08b') for num in Payload])
-    # print("New Payload:", binaryPayload)
-    concenatedPayload= ''.join(binaryPayload)
-    padding= k - len(concenatedPayload) % k
+    def embed(self, cover_image_path, payload_path):
+        X = cv2.imread(cover_image_path, cv2.IMREAD_GRAYSCALE)
+        w, h = X.shape
+        X_flatten = X.flatten()
 
-    #slicing to k digit
-    slicedPayload = [concenatedPayload[i:i+k] for i in range(0, len(concenatedPayload), k)]
-    # print("Sliced Payload:", slicedPayload)
+        d = self._get_d(X_flatten)
+        cp_x1 = np.copy(X_flatten)
+        cp_x2 = np.copy(X_flatten)
 
-    base10Payload = [int(binary_string, 2) for binary_string in slicedPayload]
-    base10Payload = np.array(base10Payload)
-    lengthBase10Conv=len(base10Payload)
-    # print("Base10 Payload:", base10Payload)
-    return base10Payload,lengthBase10Conv, padding
+        with open(payload_path, 'r') as file:
+            payload_data = file.read().strip().split('\n')
+        Payload = np.array([int(char) for char in payload_data])
 
-def centerShiftOperation(s,d,n):
-    dAks1=getDAks1(s,d)
-    # print("dAks1:",dAks1)
-    dAks2=getDAks2(dAks1,n)
-    # print("dAks2:",dAks2)
+        new_payload, length_base10_conv, padding = self._secret_data_step(Payload)
+        d1, d2 = self._center_shift_operation(new_payload, d)
+        x1, x2 = self._get_stego(cp_x1, cp_x2, d1, d2)
 
-    d1=calculateD1(dAks2)
-    # print("d1:",d1)
-    d2=calculateD2(dAks2)
-    # print("d2:",d2)
+        X1 = x1.reshape(w, h)
+        X2 = x2.reshape(w, h)
 
-    return d1,d2
+        psnr_value1 = cv2.PSNR(X, X1)
+        psnr_value2 = cv2.PSNR(X, X2)
+        print("PSNR Value1:", psnr_value1)
+        print("PSNR Value2:", psnr_value2)
 
-def getStego(cpX1,cpX2,d1,d2):
-    x1=calcualateStego(cpX1,d1)
-    x2=calcualateStego(cpX2,d2)
-    # print("x1:",x1)
-    # print("x2:",x2)
-    return x1,x2
+        return X1, X2, Payload, length_base10_conv, padding
 
+    def extract(self, stego_image1, stego_image2, original_shape, payload_length, padding):
+        w, h = original_shape
+        x1 = stego_image1.flatten()
+        x2 = stego_image2.flatten()
 
-def getD(X,n):
-    d=[]
-    denom=pow(2,8-n)
-    for i in range(len(X)):
-        d.append(math.floor(int(X[i]) / denom ))
-    
-    arrD=np.array(d,dtype=int)
-    # print(d)
-    return arrD
+        d_aks2 = self._calculate_difference(x1, x2)
+        X_recovered = self._get_cover_image(x1, x2)
+        d_recovered = self._get_d(X_recovered)
+        s = self._calculate_secret_data_base10(d_recovered, d_aks2)
+        S10 = s[:payload_length]
 
-def getDAks1(s,d):
-    # print("len s:",len(s))
-    # print("len d:",len(d))
-    dAks1=[]
-    for i in range(len(s)):
-        dAks1.append(s[i]-d[i])
-    return dAks1
-        
-def getDAks2(dAks1,n):
-    dAks2=[]
-    substractor=pow(2,n-1)
-    dAks2=[dAks1[i]-substractor for i in range(len(dAks1))]
-    return dAks2
+        S2 = self._convert_to_base2_with_n_digits(S10, self.k, padding)
+        concatenated_base2 = self._convert_and_concatenate(S2)
+        secret_data = self._convert_to_base10_per_8digits(concatenated_base2)
 
-def calculateD1(dAks2):
-    d1=[]
-    d1=[math.floor(dAks2[i]/2) for i in range(len(dAks2))]
-    return d1
+        return secret_data
 
-def calculateD2(dAks2):
-    d1=[]
-    d1=[math.floor(dAks2[i]/(-2)) for i in range(len(dAks2))]
-    return d1
+    def _secret_data_step(self, payload):
+        binary_payload = np.array([format(num, '08b') for num in payload])
+        concatenated_payload = ''.join(binary_payload)
+        padding = self.k - len(concatenated_payload) % self.k
 
-def calcualateStego(cpX,d):
-    # print("d:",d)
-    stego=cpX
-    counter=1
-    
-    for i in range(len(cpX)):
-        if counter <= len(d):
-            stego[i]=cpX[i]+d[counter-1]
-            counter+=1
-        else:
-            stego[i]=cpX[i]
-    print("stego:",stego)
-    return stego
+        sliced_payload = [concatenated_payload[i:i+self.k] for i in range(0, len(concatenated_payload), self.k)]
+        base10_payload = np.array([int(binary_string, 2) for binary_string in sliced_payload])
+        length_base10_conv = len(base10_payload)
+        return base10_payload, length_base10_conv, padding
 
-def calculateDifferent(X1, X2):
-    # print("X1 in calculateDifferent:", X1)
-    # print("X2 in calculateDifferent:", X2)
-    
-    # Convert to signed integers to handle negative differences
-    X1_signed = X1.astype(np.int16)
-    X2_signed = X2.astype(np.int16)
-    
-    diff = X1_signed - X2_signed
-    # print("diff:", diff)
-    
-    return diff
+    def _center_shift_operation(self, s, d):
+        d_aks1 = self._get_d_aks1(s, d)
+        d_aks2 = self._get_d_aks2(d_aks1)
+        d1 = self._calculate_d1(d_aks2)
+        d2 = self._calculate_d2(d_aks2)
+        return d1, d2
 
-def getCoverImage(X1, X2):
-    X = np.zeros_like(X1)  
-    for i in range(len(X1)):
-        X[i] = math.ceil((int(X1[i]) + int(X2[i])) / 2)
-    return X
+    def _get_stego(self, cp_x1, cp_x2, d1, d2):
+        x1 = self._calculate_stego(cp_x1, d1)
+        x2 = self._calculate_stego(cp_x2, d2)
+        return x1, x2
 
-def calculateSecretDataBase10(d,dAks2,n):
-    s=np.zeros_like(d)
-    temp=pow(2,n-1)
-    for i in range(len(d)):
-        s[i]=d[i]+dAks2[i]+temp
-    return s
+    def _get_d(self, x):
+        denom = pow(2, 8 - self.n)
+        d = [math.floor(int(x[i]) / denom) for i in range(len(x))]
+        return np.array(d, dtype=int)
 
+    def _get_d_aks1(self, s, d):
+        return [s[i] - d[i] for i in range(len(s))]
 
-def convert_to_base2_with_n_digits(array, n, padding):
-    base2_array = [format(num, f'0{n}b') for num in array]
-    
-    # Handle padding for the last value
-    if padding > 0 and len(base2_array) > 0:
-        base2_array[-1] = base2_array[-1][-n+padding:]
-    
-    return base2_array
+    def _get_d_aks2(self, d_aks1):
+        subtractor = pow(2, self.n - 1)
+        return [d_aks1[i] - subtractor for i in range(len(d_aks1))]
 
-def convert_and_concatenate(array):
-    # Concatenate the binary strings to form a single binary string
-    concatenated_binary_string = ''.join(array)
-    return concatenated_binary_string
+    def _calculate_d1(self, d_aks2):
+        return [math.floor(d_aks2[i] / 2) for i in range(len(d_aks2))]
 
-def convert_to_base10_per_8digits(binary_string):
-    # Split the binary string into chunks of 8 digits
-    chunks = [binary_string[i:i+8] for i in range(0, len(binary_string), 8)]
-    
-    # Convert each chunk to base 10
-    base10_array = [int(chunk, 2) for chunk in chunks]
-    
-    return base10_array
+    def _calculate_d2(self, d_aks2):
+        return [math.floor(d_aks2[i] / (-2)) for i in range(len(d_aks2))]
 
-# Load n value
-n=5
-k=n+1
+    def _calculate_stego(self, cp_x, d):
+        stego = cp_x.copy()
+        for i in range(len(cp_x)):
+            if i < len(d):
+                stego[i] = cp_x[i] + d[i]
+        return stego
 
-# Load the cover image and display it
-X = cv2.imread('/home/aydin/Vscode/Kuliah/SteganographyResearch-master/7.1.03.tiff', cv2.IMREAD_GRAYSCALE)
-cv2.imshow('Input: Cover image', X)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+    def _calculate_difference(self, x1, x2):
+        x1_signed = x1.astype(np.int16)
+        x2_signed = x2.astype(np.int16)
+        return x1_signed - x2_signed
 
-w,h=X.shape
-XFlatten=X.flatten() #convert to 1D array
-print("XFlatten:",XFlatten)
-d=getD(XFlatten,n)
-print("d:",d)
-# for i in d:
-#     print(i,end=" ")
-cpX1=np.copy(XFlatten)
-cpX2=np.copy(XFlatten)
+    def _get_cover_image(self, x1, x2):
+        return np.array([math.ceil((int(x1[i]) + int(x2[i])) / 2) for i in range(len(x1))])
 
-# Load the payload
-with open('/home/aydin/Vscode/Kuliah/SteganographyResearch-master/random_numbers.txt', 'r') as file:
-    payload_data = file.read().strip().split('\n')
+    def _calculate_secret_data_base10(self, d, d_aks2):
+        temp = pow(2, self.n - 1)
+        return [d[i] + d_aks2[i] + temp for i in range(len(d))]
 
-# Convert the payload data to a numpy array
-Payload = np.array([int(char) for char in payload_data])
-print("Payload type:", type(Payload))
-print("Payload shape:", Payload.shape)
-# print("Payload:", Payload)
-newPayload,lengthBase10Conv,padding=secretDataStep(Payload,k)
+    def _convert_to_base2_with_n_digits(self, array, n, padding):
+        base2_array = [format(num, f'0{n}b') for num in array]
+        if padding > 0 and len(base2_array) > 0:
+            base2_array[-1] = base2_array[-1][-n + padding:]
+        return base2_array
 
-d1,d2=centerShiftOperation(newPayload,d,n)
+    def _convert_and_concatenate(self, array):
+        return ''.join(array)
 
-x1,x2=getStego(cpX1,cpX2,d1,d2)
-# print("x1:",x1)
-# print("x2:",x2)
-X1=x1.reshape(w,h)
-X2=x2.reshape(w,h)
+    def _convert_to_base10_per_8digits(self, binary_string):
+        chunks = [binary_string[i:i+8] for i in range(0, len(binary_string), 8)]
+        return [int(chunk, 2) for chunk in chunks]
 
-# cv2.imshow('Output: Stego image', X1)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-psnr_value = cv2.PSNR(X, X1)
-print("PSNR Value1:", psnr_value)
+# Example usage
+n = 1
+stego = Steganography(n)
 
+# Embedding
+cover_image_path = '/home/aydin/Vscode/Kuliah/SteganographyResearch-master/7.1.03.tiff'
+payload_path = '/home/aydin/Vscode/Kuliah/SteganographyResearch-master/random_numbers.txt'
+X1, X2, Payload, length_base10_conv, padding = stego.embed(cover_image_path, payload_path)
 
-# cv2.imshow('Output: Stego image', X2)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-psnr_value = cv2.PSNR(X, X2)
-print("PSNR Value2:", psnr_value)
+# Extracting
+original_shape = (512, 512)  # Example shape, replace with actual
+secret_data = stego.extract(X1, X2, original_shape, length_base10_conv, padding)
 
-
-
-##EXTRACTION
-dAks2=calculateDifferent(x1,x2)
-# print("diff:",dAks2)
-X=getCoverImage(x1,x2)
-# print("X:",X)
-Xtemp=X.reshape(w,h)
-# print("Are equal:",np.array_equal(XFlatten,X))
-# cv2.imshow('Output: cover image', Xtemp)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-
-d=getD(X,n)
-# print("d:",d)
-
-s=calculateSecretDataBase10(d,dAks2,n)
-S10=s[:lengthBase10Conv]
-# print("Base10 conv:",S10)
-# print("Base10 Secret:",end=" ") ##########################Isinya sudah sama, hanya saja jumlah payloadnya terlalu banyak
-# for i in range(20):
-#     print(s[i],end=" ")
-
-S2=convert_to_base2_with_n_digits(S10,k,padding)
-# print("Base2 Secret:",S2)
-concatenateBase2=convert_and_concatenate(S2)
-secretData=convert_to_base10_per_8digits(concatenateBase2)
-# print("Secret Data:",secretData)
-
-if np.array_equal(secretData, Payload):
+if np.array_equal(secret_data, Payload):
     print("Data is same")
 else:
     print("Data is different")
